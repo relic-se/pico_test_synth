@@ -18,6 +18,10 @@ import audiofilters
 import synthio
 import audiofreeverb
 
+from synth_tools.param import ParamRange
+from ui import UI, splash_screen
+splash_screen(hardware.display)
+
 # Settings
 
 LEVEL      = 0.25  # Use `SAMPLES[notenum]["level"]` to override
@@ -104,27 +108,22 @@ mixer = audiomixer.Mixer(
     voice_count=len(samples),
 )
 
-if hardware.is_rp2350:
-    effect_filter = audiofilters.Filter(
-        filter=synthio.Biquad(synthio.FilterMode.LOW_PASS, FILTER_MAX, 1.2),
-        sample_rate=hardware.SAMPLE_RATE,
-        channel_count=hardware.CHANNEL_COUNT,
-        buffer_size=hardware.BUFFER_SIZE,
-    )
-    effect_reverb = audiofreeverb.Freeverb(
-        mix=0.0,
-        sample_rate=hardware.SAMPLE_RATE,
-        channel_count=hardware.CHANNEL_COUNT,
-        buffer_size=hardware.BUFFER_SIZE,
-    )
+effect_filter = audiofilters.Filter(
+    filter=synthio.Biquad(synthio.FilterMode.LOW_PASS, FILTER_MAX, 1.2),
+    sample_rate=hardware.SAMPLE_RATE,
+    channel_count=hardware.CHANNEL_COUNT,
+    buffer_size=hardware.BUFFER_SIZE,
+)
+effect_reverb = audiofreeverb.Freeverb(
+    mix=0.0,
+    sample_rate=hardware.SAMPLE_RATE,
+    channel_count=hardware.CHANNEL_COUNT,
+    buffer_size=hardware.BUFFER_SIZE,
+)
 
-    hardware.audio.play(effect_reverb)
-    effect_reverb.play(effect_filter)
-    effect_filter.play(mixer)
-
-else:
-    hardware.audio.play(mixer)
-
+hardware.audio.play(effect_reverb)
+effect_reverb.play(effect_filter)
+effect_filter.play(mixer)
 
 for i, wav in enumerate(samples.values()):
     mixer.voice[i].play(wav)
@@ -155,22 +154,10 @@ def play_sample(sample:dict) -> None:
         mixer.voice[i].loop = sample.get("loop", False)
         mixer.voice[i].play(wav)
 
-def stop_sample(sample:dict) -> None:
-    if sample.get("loop", False):
-        i = get_sample_index(sample["name"])
+def stop_sample(sample:dict|str) -> None:
+    if type(sample) is str or sample.get("loop", False):
+        i = get_sample_index(sample if type(sample) is str else sample["name"])
         mixer.voice[i].stop()
-
-# Keyboard
-
-async def touch_handler():
-    while True:
-        for event in hardware.check_touch():
-            if (notenum := event.key_number + 36) in SAMPLES and (sample := get_sample(notenum)):
-                if event.pressed:
-                    play_sample(sample)
-                elif event.released:
-                    stop_sample(sample)
-        await asyncio.sleep(0.005)
 
 # MIDI
 
@@ -190,15 +177,72 @@ async def midi_handler():
 
 # Controls
 
-async def controls_handler():
-    while True:
-        for event in hardware.check_buttons():
-            pass
+button_held = False
+button_with_touch = False
 
-        knobA, knobB = hardware.knobA.value, hardware.knobB.value
-        if hardware.is_rp2350:
-            effect_filter.filter.frequency = ((knobA / 65535.0) ** 2) * (FILTER_MAX - FILTER_MIN) + FILTER_MIN
-            effect_reverb.mix = knobB / 65535.0
+params = (
+    
+    ParamRange("FiltFreq", "filter frequency", FILTER_MAX, "%4d", FILTER_MIN, FILTER_MAX,
+        setter=lambda x: setattr(effect_filter.filter, "frequency", x),
+        getter=lambda: getattr(effect_filter.filter, "frequency")
+    ),
+    ParamRange("FilterRes", "filter resonance", 0.7, "%1.2f", 0.1, 2.5,
+        setter=lambda x: setattr(effect_filter.filter, "Q", x),
+        getter=lambda: getattr(effect_filter.filter, "Q")
+    ),
+
+    ParamRange("ReverbMix", "reverb mix", 0.0, "%1.2f", 0.0, 1.0,
+        setter=lambda x: setattr(effect_reverb, "mix", x),
+        getter=lambda: getattr(effect_reverb, "mix")
+    ),
+    ParamRange("RevrbSize", "reverb roomsize", 0.5, "%1.2f", 0.0, 1.0,
+        setter=lambda x: setattr(effect_reverb, "roomsize", x),
+        getter=lambda: getattr(effect_reverb, "roomsize")
+    ),
+
+)
+
+ui = UI(hardware.display, params, hardware.knobA.value, hardware.knobB.value)
+ui.set_patch_name("drums")
+
+async def touch_handler():
+    global button_held, button_with_touch, ui
+    while True:
+        for event in hardware.check_touch():
+            if not button_held:
+                if (notenum := event.key_number + 36) in SAMPLES and (sample := get_sample(notenum)):
+                    if event.pressed:
+                        play_sample(sample)
+                        # Special case for hihat
+                        if notenum in (42, 44):
+                            stop_sample("hihat_open")
+                    elif event.released:
+                        stop_sample(sample)
+            elif event.pressed and not button_with_touch:
+                button_with_touch = True
+                if event.key_number < (ui.num_params//2):
+                    ui.select_pair(event.key_number)
+            elif event.released:
+                button_with_touch = False
+        await asyncio.sleep(0.005)
+
+async def controls_handler():
+    global button_held, button_with_touch, ui
+    while True:
+        hardware.display.refresh()
+        
+        for event in hardware.check_buttons():
+            if event.key_number == 0:
+                pass
+            elif event.key_number == 1:
+                if event.pressed:
+                    button_held = True
+                if event.released:
+                    button_held = False
+                    button_with_touch = False
+
+        ui.setA(hardware.knobA.value >> 8)
+        ui.setB(hardware.knobB.value >> 8)
 
         await asyncio.sleep(0.005)
 
