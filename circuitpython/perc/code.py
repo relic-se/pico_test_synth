@@ -14,73 +14,77 @@ import asyncio
 import audiocore
 import os
 import audiomixer
+import audiofilters
+import synthio
+import audiofreeverb
 
 # Settings
 
-LEVEL = 0.25  # Use `SAMPLES[notenum]["level"]` to override
+LEVEL      = 0.25  # Use `SAMPLES[notenum]["level"]` to override
+FILTER_MAX = 20000.0
+FILTER_MIN = 50.0
 
-## Velocity is 0->127
-HARD = 100
-SOFT = 0  # Adjust to act as gate
+VELOCITY_HARD = 100  # Velocity is 0->127
+VELOCITY_SOFT = 0  # Adjust to act as gate
 
 SAMPLES = {
     36: {
         "samples": {
-            HARD: "kick_hard",
-            SOFT: "kick_soft"
+            VELOCITY_HARD: "kick_hard",
+            VELOCITY_SOFT: "kick_soft"
         },
         "level": 0.3
     },
     38: {
         "samples": {
-            HARD: "snare_hard",
-            SOFT: "snare_soft"
+            VELOCITY_HARD: "snare_hard",
+            VELOCITY_SOFT: "snare_soft"
         },
         "level": 0.3
     },
     41: {
         "samples": {
-            HARD: "tom_lo_hard",
-            SOFT: "tom_lo_soft"
+            VELOCITY_HARD: "tom_lo_hard",
+            VELOCITY_SOFT: "tom_lo_soft"
         }
     },
     42: {
         "samples": {
-            SOFT: "hihat_closed"
+            VELOCITY_SOFT: "hihat_closed"
         }
     },
     43: {
         "samples": {
-            HARD: "tom_mid_hard",
-            SOFT: "tom_mid_soft"
+            VELOCITY_HARD: "tom_mid_hard",
+            VELOCITY_SOFT: "tom_mid_soft"
         }
     },
     44: {
         "samples": {
-            SOFT: "hihat_pedal"
+            VELOCITY_SOFT: "hihat_pedal"
         }
     },
     45: {
         "samples": {
-            HARD: "tom_hi_hard",
-            SOFT: "tom_hi_soft"
+            VELOCITY_HARD: "tom_hi_hard",
+            VELOCITY_SOFT: "tom_hi_soft"
         }
     },
     46: {
         "samples": {
-            SOFT: "hihat_open"
+            VELOCITY_SOFT: "hihat_open"
         }
     },
     49: {
         "samples": {
-            HARD: "crash_hard",
-            SOFT: "crash_soft"
+            VELOCITY_HARD: "crash_hard",
+            VELOCITY_SOFT: "crash_soft"
         }
     },
     51: {
         "samples": {
-            HARD: "ride_hard",
-            SOFT: "ride_soft"
+            VELOCITY_HARD: "ride_hard",
+            VELOCITY_SOFT: "ride_soft"
         }
     }
 }
@@ -100,7 +104,24 @@ mixer = audiomixer.Mixer(
     voice_count=len(samples),
 )
 
-hardware.audio.play(mixer)
+effect_filter = audiofilters.Filter(
+    filter=synthio.Biquad(synthio.FilterMode.LOW_PASS, FILTER_MAX, 1.2),
+    sample_rate=hardware.SAMPLE_RATE,
+    channel_count=hardware.CHANNEL_COUNT,
+    buffer_size=hardware.BUFFER_SIZE,
+)
+
+effect_reverb = audiofreeverb.Freeverb(
+    mix=0.0,
+    sample_rate=hardware.SAMPLE_RATE,
+    channel_count=hardware.CHANNEL_COUNT,
+    buffer_size=hardware.BUFFER_SIZE,
+)
+
+hardware.audio.play(effect_reverb)
+effect_reverb.play(effect_filter)
+effect_filter.play(mixer)
+
 for i, wav in enumerate(samples.values()):
     mixer.voice[i].play(wav)
     mixer.voice[i].level = 0.0
@@ -169,7 +190,11 @@ async def controls_handler():
     while True:
         for event in hardware.check_buttons():
             pass
+
         knobA, knobB = hardware.knobA.value, hardware.knobB.value
+        effect_filter.filter.frequency = ((knobA / 65535.0) ** 2) * (FILTER_MAX - FILTER_MIN) + FILTER_MIN
+        effect_reverb.mix = knobB / 65535.0
+
         await asyncio.sleep(0.005)
 
 async def main():
