@@ -104,23 +104,27 @@ mixer = audiomixer.Mixer(
     voice_count=len(samples),
 )
 
-effect_filter = audiofilters.Filter(
-    filter=synthio.Biquad(synthio.FilterMode.LOW_PASS, FILTER_MAX, 1.2),
-    sample_rate=hardware.SAMPLE_RATE,
-    channel_count=hardware.CHANNEL_COUNT,
-    buffer_size=hardware.BUFFER_SIZE,
-)
+if hardware.is_rp2350:
+    effect_filter = audiofilters.Filter(
+        filter=synthio.Biquad(synthio.FilterMode.LOW_PASS, FILTER_MAX, 1.2),
+        sample_rate=hardware.SAMPLE_RATE,
+        channel_count=hardware.CHANNEL_COUNT,
+        buffer_size=hardware.BUFFER_SIZE,
+    )
+    effect_reverb = audiofreeverb.Freeverb(
+        mix=0.0,
+        sample_rate=hardware.SAMPLE_RATE,
+        channel_count=hardware.CHANNEL_COUNT,
+        buffer_size=hardware.BUFFER_SIZE,
+    )
 
-effect_reverb = audiofreeverb.Freeverb(
-    mix=0.0,
-    sample_rate=hardware.SAMPLE_RATE,
-    channel_count=hardware.CHANNEL_COUNT,
-    buffer_size=hardware.BUFFER_SIZE,
-)
+    hardware.audio.play(effect_reverb)
+    effect_reverb.play(effect_filter)
+    effect_filter.play(mixer)
 
-hardware.audio.play(effect_reverb)
-effect_reverb.play(effect_filter)
-effect_filter.play(mixer)
+else:
+    hardware.audio.play(mixer)
+
 
 for i, wav in enumerate(samples.values()):
     mixer.voice[i].play(wav)
@@ -192,8 +196,9 @@ async def controls_handler():
             pass
 
         knobA, knobB = hardware.knobA.value, hardware.knobB.value
-        effect_filter.filter.frequency = ((knobA / 65535.0) ** 2) * (FILTER_MAX - FILTER_MIN) + FILTER_MIN
-        effect_reverb.mix = knobB / 65535.0
+        if hardware.is_rp2350:
+            effect_filter.filter.frequency = ((knobA / 65535.0) ** 2) * (FILTER_MAX - FILTER_MIN) + FILTER_MIN
+            effect_reverb.mix = knobB / 65535.0
 
         await asyncio.sleep(0.005)
 
