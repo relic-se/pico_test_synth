@@ -127,15 +127,13 @@ def play_sample(sample:dict) -> None:
         i = get_sample_index(sample["name"])
         wav = samples[sample["name"]]
         mixer.voice[i].level = sample.get("level", LEVEL)
+        mixer.voice[i].loop = sample.get("loop", False)
         mixer.voice[i].play(wav)
 
-def stop_sample(name:str) -> None:
-    global samples
-    if name in samples:
-        for i, val in enumerate(samples.keys()):
-            if val == name:
-                mixer.voice[i].stop()
-                break
+def stop_sample(sample:dict) -> None:
+    if sample.get("loop", False):
+        i = get_sample_index(sample["name"])
+        mixer.voice[i].stop()
 
 # Keyboard
 
@@ -146,8 +144,7 @@ async def touch_handler():
                 if event.pressed:
                     play_sample(sample)
                 elif event.released:
-                    pass
-                    # stop_sample(name)
+                    stop_sample(sample)
         await asyncio.sleep(0.005)
 
 # MIDI
@@ -163,8 +160,7 @@ async def midi_handler():
                 if isinstance(msg, NoteOn) and msg.velocity != 0:
                     play_sample(sample)
                 elif isinstance(msg, NoteOff) or (isinstance(msg, NoteOn) and msg.velocity == 0):
-                    pass
-                    # stop_sample(name)
+                    stop_sample(sample)
         await asyncio.sleep(0)
 
 # Controls
