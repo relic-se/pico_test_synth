@@ -22,8 +22,8 @@ BUFFER_SIZE = 2048
 
 # MCU
 
-#import microcontroller
-#microcontroller.cpu.frequency = 200_000_000
+import microcontroller
+microcontroller.cpu.frequency = 180_000_000
 
 is_rp2350 = 'rp2350' in os.uname()[0]
 
