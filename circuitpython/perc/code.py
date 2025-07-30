@@ -180,7 +180,7 @@ async def midi_handler():
                     play_sample(sample)
                 elif isinstance(msg, NoteOff) or (isinstance(msg, NoteOn) and msg.velocity == 0):
                     stop_sample(sample)
-        await asyncio.sleep(0)
+        await asyncio.sleep(0.001)
 
 # Controls
 
@@ -251,7 +251,7 @@ async def controls_handler():
         ui.setA(hardware.knobA.value >> 8)
         ui.setB(hardware.knobB.value >> 8)
 
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(0.1)
 
 async def main():
     await asyncio.gather(
