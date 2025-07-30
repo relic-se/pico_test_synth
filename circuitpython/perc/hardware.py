@@ -17,7 +17,7 @@ import os
 # Settings
 
 SAMPLE_RATE = 44100
-CHANNEL_COUNT = 1
+CHANNEL_COUNT = 2
 BUFFER_SIZE = 2048
 
 # MCU

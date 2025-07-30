@@ -25,8 +25,9 @@ splash_screen(hardware.display)
 # Settings
 
 LEVEL      = 0.25  # Use `SAMPLES[notenum]["level"]` to override
-FILTER_MAX = 20000.0
+FILTER_MAX = min(20000.0, hardware.SAMPLE_RATE / 2.0)
 FILTER_MIN = 50.0
+WIDTH      = 1.0  # 0.0->1.0
 
 VELOCITY_HARD = 100  # Velocity is 0->127
 VELOCITY_SOFT = 0  # Adjust to act as gate
@@ -44,52 +45,61 @@ SAMPLES = {
             VELOCITY_HARD: "snare_hard",
             VELOCITY_SOFT: "snare_soft"
         },
-        "level": 0.3
+        "level": 0.3,
+        "panning": -0.3 * WIDTH
     },
     41: {
         "samples": {
             VELOCITY_HARD: "tom_lo_hard",
             VELOCITY_SOFT: "tom_lo_soft"
-        }
+        },
+        "panning": 1.0 * WIDTH
     },
     42: {
         "samples": {
             VELOCITY_SOFT: "hihat_closed"
-        }
+        },
+        "panning": -1.0 * WIDTH
     },
     43: {
         "samples": {
             VELOCITY_HARD: "tom_mid_hard",
             VELOCITY_SOFT: "tom_mid_soft"
-        }
+        },
+        "panning": 0.4 * WIDTH
     },
     44: {
         "samples": {
             VELOCITY_SOFT: "hihat_pedal"
-        }
+        },
+        "panning": -1.0 * WIDTH
     },
     45: {
         "samples": {
             VELOCITY_HARD: "tom_hi_hard",
             VELOCITY_SOFT: "tom_hi_soft"
-        }
+        },
+        "panning": -0.4 * WIDTH
     },
     46: {
         "samples": {
             VELOCITY_SOFT: "hihat_open"
-        }
+        },
+        "panning": -1.0 * WIDTH
     },
     49: {
         "samples": {
             VELOCITY_HARD: "crash_hard",
             VELOCITY_SOFT: "crash_soft"
-        }
+        },
+        "panning": -0.6 * WIDTH
     },
     51: {
         "samples": {
             VELOCITY_HARD: "ride_hard",
             VELOCITY_SOFT: "ride_soft"
-        }
+        },
+        "panning": 0.6 * WIDTH
     }
 }
 
@@ -125,10 +135,6 @@ hardware.audio.play(effect_reverb)
 effect_reverb.play(effect_filter)
 effect_filter.play(mixer)
 
-for i, wav in enumerate(samples.values()):
-    mixer.voice[i].play(wav)
-    mixer.voice[i].level = 0.0
-
 def get_sample(notenum:int, velocity:int = 127) -> tuple[str, float]|None:
     if notenum in SAMPLES:
         sample = SAMPLES[notenum].copy()
@@ -151,6 +157,7 @@ def play_sample(sample:dict) -> None:
         i = get_sample_index(sample["name"])
         wav = samples[sample["name"]]
         mixer.voice[i].level = sample.get("level", LEVEL)
+        mixer.voice[i].panning = sample.get("panning", 0.0)
         mixer.voice[i].loop = sample.get("loop", False)
         mixer.voice[i].play(wav)
 
@@ -244,7 +251,7 @@ async def controls_handler():
         ui.setA(hardware.knobA.value >> 8)
         ui.setB(hardware.knobB.value >> 8)
 
-        await asyncio.sleep(0.005)
+        await asyncio.sleep(0.01)
 
 async def main():
     await asyncio.gather(
